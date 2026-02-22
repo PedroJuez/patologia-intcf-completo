@@ -817,6 +817,8 @@ def cargar_modelo():
         import torch
         from open_clip import create_model_from_pretrained, get_tokenizer
         
+        # Intentamos cargar el modelo. Si falla por llaves estrictas (como position_ids), 
+        # las versiones en requirements.txt deberían prevenirlo, pero añadimos log extra.
         modelo, procesador = create_model_from_pretrained(
             'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224'
         )
