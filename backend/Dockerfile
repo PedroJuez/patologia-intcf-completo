@@ -9,8 +9,9 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements e instalar
+# Copiar requirements e instalar torch primero para asegurar versión CPU
 COPY requirements.txt .
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu torch torchvision
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar el resto del código del backend
