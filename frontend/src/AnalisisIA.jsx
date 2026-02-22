@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Brain, Upload, Loader2, CheckCircle, XCircle, AlertTriangle, Cpu, HardDrive, Zap, Trash2, Stethoscope, Activity, FileText } from 'lucide-react';
-import { verificarConexion, obtenerEstadoModelo, analizarImagen, liberarModelo, archivoABase64 } from './api';
+import { verificarConexion, obtenerEstadoModelo, analizarImagen, liberarModelo, archivoABase64, API_URL } from './api';
 
 export default function AnalisisIA({ onResultado, imagenActual }) {
   const [conectado, setConectado] = useState(false);
@@ -248,6 +248,7 @@ export default function AnalisisIA({ onResultado, imagenActual }) {
           <div className="p-6 border-2 border-dashed border-red-200 rounded-xl text-center bg-red-50">
             <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-2" />
             <p className="text-red-600 font-medium">Backend no disponible</p>
+            <p className="text-xs text-red-400 mt-1 mb-2">Intentando conectar a: {API_URL}</p>
             <p className="text-sm text-red-500 mt-1">
               Inicia el servidor con: <code className="bg-red-100 px-1 rounded">iniciar_servidor.bat</code>
             </p>
