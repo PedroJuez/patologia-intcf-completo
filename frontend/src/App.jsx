@@ -1173,7 +1173,10 @@ export default function PatologiaDigitalINTCF() {
               </div>
               <div>
                 <div className="font-bold text-lg tracking-wide">INTCF</div>
-                <div className="text-xs text-blue-200">Patología Digital</div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-blue-200">Patología Digital</span>
+                  <span className="text-[10px] text-blue-300/80 italic font-light">Creado por Pedro Juez Martel</span>
+                </div>
               </div>
             </div>
             <div className="hidden md:block w-px h-8 bg-white/20 mx-2"/>
