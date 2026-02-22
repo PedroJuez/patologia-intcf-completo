@@ -896,7 +896,16 @@ def analizar_imagen(imagen_bytes: bytes, organo_filtro: str = None) -> dict:
     
     template = "this is a histopathology image showing "
     textos = [template + d["texto"] for d in diagnosticos]
-    tokens = tokenizer(textos)
+    
+    try:
+        tokens = tokenizer(textos)
+    except Exception as e:
+        print(f"⚠️ Error en tokenización estándar: {e}")
+        # Intento manual si el wrapper de open_clip falla
+        if hasattr(tokenizer, 'tokenizer'):
+            tokens = tokenizer.tokenizer(textos, padding=True, truncation=True, return_tensors="pt")["input_ids"]
+        else:
+            raise e
     
     inicio = time.time()
     with torch.no_grad():

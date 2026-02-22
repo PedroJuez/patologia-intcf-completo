@@ -3,7 +3,11 @@ fastapi
 uvicorn
 python-multipart
 pillow
-open_clip_torch
+torch==2.1.2
+torchvision==0.16.2
+open_clip_torch==2.24.0
+transformers==4.30.2
 pandas
 openpyxl
-transformers
+ftfy
+regex
