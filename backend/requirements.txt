@@ -6,3 +6,4 @@ pillow
 open_clip_torch
 pandas
 openpyxl
+transformers
