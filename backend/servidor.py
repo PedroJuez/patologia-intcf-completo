@@ -1044,7 +1044,7 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+@app.get("/api")
 async def raiz():
     """Endpoint raíz - información del servicio"""
     total_diagnosticos = sum(len(data["diagnosticos"]) for data in CATEGORIAS_FORENSES.values())
@@ -1069,7 +1069,7 @@ async def raiz():
     }
 
 
-@app.get("/estado")
+@app.get("/api/estado")
 async def obtener_estado():
     """Obtiene el estado de los modelos. Sincronizado con el frontend."""
     status = {}
@@ -1104,7 +1104,7 @@ async def obtener_estado():
     return status
 
 
-@app.get("/categorias")
+@app.get("/api/categorias")
 async def obtener_categorias():
     """Obtiene todas las categorías diagnósticas disponibles"""
     return {
@@ -1121,7 +1121,7 @@ async def obtener_categorias():
     }
 
 
-@app.get("/categorias/{categoria}")
+@app.get("/api/categorias/{categoria}")
 async def obtener_categoria(categoria: str):
     """Obtiene los diagnósticos de una categoría específica"""
     if categoria not in CATEGORIAS_FORENSES:
@@ -1165,7 +1165,7 @@ async def endpoint_liberar_modelo(modelo: str = "todas"):
     return {"exito": True, "mensaje": f"Modelo(s) {modelo} liberado(s) de memoria"}
 
 
-@app.post("/analizar")
+@app.post("/api/analizar")
 async def analizar(archivo: UploadFile = File(...)):
     """
     Analiza una imagen histológica buscando en TODAS las categorías forenses.
@@ -1191,7 +1191,7 @@ async def analizar(archivo: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error en análisis: {str(e)}")
 
 
-@app.post("/analizar/{categoria}")
+@app.post("/api/analizar/{categoria}")
 async def analizar_por_categoria(categoria: str, archivo: UploadFile = File(...)):
     """
     Analiza una imagen buscando solo en diagnósticos de la categoría especificada.
@@ -1465,7 +1465,7 @@ def analizar_imagen_radiografia(imagen_bytes: bytes) -> dict:
     }
 
 
-@app.post("/analizar-radiografia")
+@app.post("/api/analizar-radiografia")
 async def analizar_radiografia(archivo: UploadFile = File(...)):
     """
     Analiza una radiografía de tórax.
@@ -1493,7 +1493,7 @@ async def analizar_radiografia(archivo: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error en análisis: {str(e)}")
 
 
-@app.get("/categorias-radiografia")
+@app.get("/api/categorias-radiografia")
 async def obtener_categorias_radiografia():
     """Obtiene las categorías de radiografía disponibles"""
     return {
@@ -1510,7 +1510,7 @@ async def obtener_categorias_radiografia():
     }
 
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
     """Verificación de salud del servicio"""
     biomed_ok = modelos_cargados["biomedclip"]["modelo"] is not None
