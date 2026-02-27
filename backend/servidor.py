@@ -1081,13 +1081,13 @@ async def obtener_estado():
         "num_diagnosticos": sum(len(data["diagnosticos"]) for data in CATEGORIAS_FORENSES.values())
     }
     
-    # BioViL status (reutiliza el motor BiomedCLIP)
-    cargado_biovil = modelos_cargados["biovil"]["modelo"] is not None
+    # BioViL status (reutiliza el motor BiomedCLIP si está cargado)
+    cargado_biovil = cargado_biomed or modelos_cargados["biovil"]["modelo"] is not None
     status["biovil"] = {
         "cargado": cargado_biovil,
         "nombre": "BioViL-T (Microsoft)",
         "tipo": "Zero-Shot Classification - Radiografía de Tórax",
-        "consumo_ram": "~1.5 GB (compartido con BiomedCLIP)" if cargado_biovil else "0 GB",
+        "consumo_ram": "~1.5 GB" if cargado_biovil else "0 GB",
         "num_categorias": len(CATEGORIAS_RADIOGRAFIA),
         "num_diagnosticos": sum(len(data["diagnosticos"]) for data in CATEGORIAS_RADIOGRAFIA.values())
     }
@@ -1394,21 +1394,35 @@ def analizar_imagen_radiografia(imagen_bytes: bytes) -> dict:
     tokenizer = m["tokenizer"]
 
     imagen = Image.open(io.BytesIO(imagen_bytes)).convert("RGB")
+    imagen_procesada = procesador(imagen).unsqueeze(0)
     
     # Diagnósticos especializados para radiografía de tórax (BioViL-T style)
     diagnosticos = obtener_todos_diagnosticos_radiografia()
     template = "chest x-ray with "
     textos = [template + d["texto"] for d in diagnosticos]
     
+    try:
+        tokens = tokenizer(textos)
+    except Exception as e:
+        print(f"⚠️ Error en tokenización Rx: {e}")
+        if hasattr(tokenizer, 'tokenizer'):
+            tokens = tokenizer.tokenizer(textos, padding=True, truncation=True, return_tensors="pt")["input_ids"]
+        else:
+            raise e
+    
     inicio = time.time()
     with torch.no_grad():
-        image_input = procesador(imagen).unsqueeze(0)
-        tokens = tokenizer(textos)
+        image_features = modelo.encode_image(imagen_procesada)
+        text_features = modelo.encode_text(tokens)
         
-        image_features, text_features, logit_scale = modelo(image_input, tokens)
+        # Normalización (CRÍTICO para zero-shot)
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         
-        # Calcular probabilidades
-        probabilidades = (100.0 * image_features @ text_features.T).softmax(dim=-1).cpu().numpy()[0]
+        # Usar la escala aprendida del modelo
+        logit_scale = modelo.logit_scale.exp()
+        logits = (logit_scale * image_features @ text_features.T).softmax(dim=-1)
+        probabilidades = logits.cpu().numpy()[0]
     
     tiempo_inferencia = time.time() - inicio
     
