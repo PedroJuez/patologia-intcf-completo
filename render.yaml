@@ -1,0 +1,23 @@
+services:
+  # Backend: FastAPI
+  - type: web
+    name: patologia-backend
+    env: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn servidor:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0 # Ajusta según sea necesario
+
+  # Frontend: React (Static Site)
+  - type: static
+    name: patologia-frontend
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    publishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: patologia-backend
+          property: host
