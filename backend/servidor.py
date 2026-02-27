@@ -16,11 +16,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
-# Variables globales para el modelo (carga bajo demanda)
-modelo = None
-procesador = None
-tokenizer = None
-modelo_cargado = False
+# Estado de los modelos (carga bajo demanda)
+modelos_cargados = {
+    "biomedclip": {"modelo": None, "procesador": None, "tokenizer": None},
+    "biovil": {"modelo": None, "procesador": None, "tokenizer": None}
+}
+
+def obtener_modelo_cargado():
+    """Retorna si el modelo biomedclip está cargado (para compatibilidad)"""
+    return modelos_cargados["biomedclip"]["modelo"] is not None
 
 # =============================================================================
 # CATEGORÍAS DIAGNÓSTICAS FORENSES AMPLIADAS PARA EL INTCF
@@ -1513,6 +1517,7 @@ async def health_check():
     biovil_ok = modelos_cargados["biovil"]["modelo"] is not None
     return {
         "status": "healthy", 
+        "version": "2.2.0-BiovilT-Fix",
         "biomedclip_cargado": biomed_ok,
         "biovil_cargado": biovil_ok
     }
