@@ -7,14 +7,13 @@ services:
     startCommand: cd backend && uvicorn servidor:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.10.0 # Ajusta según sea necesario
+        value: 3.10.0
 
-  # Frontend: React (Statica)
-  - type: web
+  # Frontend: React (Static Site)
+  - type: static
     name: patologia-frontend
-    env: static
     buildCommand: cd frontend && npm install && npm run build
-    publishPath: ./frontend/dist
+    publishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
         fromService:
