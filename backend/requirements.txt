@@ -7,3 +7,5 @@ torchvision
 open_clip_torch
 pillow
 numpy
+transformers
+accelerate

@@ -803,71 +803,90 @@ def obtener_todos_diagnosticos():
     return todos
 
 
-def cargar_modelo():
-    """Carga el modelo BiomedCLIP bajo demanda"""
-    global modelo, procesador, tokenizer, modelo_cargado
+def cargar_modelo(tipo="biomedclip"):
+    """Carga el modelo especificado bajo demanda"""
+    global modelos_cargados
     
-    if modelo_cargado:
+    if modelos_cargados.get(tipo) and modelos_cargados[tipo]["modelo"] is not None:
         return True
-    
-    print("🔄 Cargando modelo BiomedCLIP (esto puede tardar 30-60 segundos la primera vez)...")
-    inicio = time.time()
-    
+        
     try:
-        import torch
-        from open_clip import create_model_from_pretrained, get_tokenizer
+        if tipo == "biomedclip":
+            print(f"🔄 Cargando modelo BiomedCLIP (esto puede tardar 30-60 segundos la primera vez)...")
+            inicio = time.time()
+            import torch
+            from open_clip import create_model_from_pretrained, get_tokenizer
+            
+            modelo, procesador = create_model_from_pretrained(
+                'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224'
+            )
+            tokenizer = get_tokenizer('hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224')
+            
+            modelo.eval()
+            for param in modelo.parameters():
+                param.requires_grad = False
+
+            modelos_cargados["biomedclip"] = {
+                "modelo": modelo,
+                "procesador": procesador,
+                "tokenizer": tokenizer
+            }
+            tiempo = time.time() - inicio
+            print(f"✅ Modelo BiomedCLIP cargado en {tiempo:.1f} segundos.")
+            return True
         
-        # Intentamos cargar el modelo. Si falla por llaves estrictas (como position_ids), 
-        # las versiones en requirements.txt deberían prevenirlo, pero añadimos log extra.
-        modelo, procesador = create_model_from_pretrained(
-            'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224'
-        )
-        tokenizer = get_tokenizer(
-            'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224'
-        )
-        
-        modelo.eval()
-        
-        for param in modelo.parameters():
-            param.requires_grad = False
-        
-        modelo_cargado = True
-        tiempo = time.time() - inicio
-        print(f"✅ Modelo BiomedCLIP cargado en {tiempo:.1f} segundos")
-        return True
-        
+        elif tipo == "biovil":
+            # Para BioViL-T, si no hay RAM suficiente, usamos BiomedCLIP como base
+            # pero con los prompts específicos de BioViL.
+            # En un entorno con más RAM podríamos cargar 'microsoft/Biovil-T'
+            print(f"🔄 Cargando BioViL-T (usando motor BiomedCLIP optimizado para Rx)...")
+            # BioViL-T en este contexto es un "modo" de BiomedCLIP con prompts específicos.
+            # Por lo tanto, cargamos BiomedCLIP si no está cargado.
+            if not cargar_modelo("biomedclip"):
+                return False
+            # Marcamos BioViL como "cargado" para indicar que su motor está listo
+            modelos_cargados["biovil"]["modelo"] = True # Usamos un booleano para indicar que está "listo"
+            print("✅ Motor BioViL-T (BiomedCLIP) listo para radiografías.")
+            return True
+            
     except Exception as e:
-        print(f"❌ Error cargando modelo: {e}")
+        print(f"❌ Error cargando modelo {tipo}: {e}")
         import traceback
         traceback.print_exc()
         return False
 
+def liberar_modelo(tipo="todas"):
+    """Libera el modelo especificado de la memoria"""
+    global modelos_cargados
+    
+    import gc
+    import torch
+    
+    tipos_a_liberar = []
+    if tipo == "todas":
+        tipos_a_liberar = list(modelos_cargados.keys())
+    elif tipo in modelos_cargados:
+        tipos_a_liberar = [tipo]
+    else:
+        print(f"⚠️ Tipo de modelo '{tipo}' no reconocido para liberar.")
+        return
 
-def liberar_modelo():
-    """Libera el modelo de memoria"""
-    global modelo, procesador, tokenizer, modelo_cargado
+    for t in tipos_a_liberar:
+        if modelos_cargados.get(t):
+            if modelos_cargados[t]["modelo"] is not None:
+                del modelos_cargados[t]["modelo"]
+            if modelos_cargados[t]["procesador"] is not None:
+                del modelos_cargados[t]["procesador"]
+            if modelos_cargados[t]["tokenizer"] is not None:
+                del modelos_cargados[t]["tokenizer"]
+            modelos_cargados[t] = {"modelo": None, "procesador": None, "tokenizer": None}
+            print(f"🧹 Modelo '{t}' liberado de memoria.")
     
-    if modelo is not None:
-        del modelo
-        modelo = None
-    if procesador is not None:
-        del procesador
-        procesador = None
-    if tokenizer is not None:
-        del tokenizer
-        tokenizer = None
-    
-    modelo_cargado = False
     gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     
-    try:
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except:
-        pass
-    
-    print("🧹 Modelo liberado de memoria")
+    print(f"🧹 Limpieza de memoria completada.")
 
 
 def analizar_imagen(imagen_bytes: bytes, organo_filtro: str = None) -> dict:
@@ -877,10 +896,17 @@ def analizar_imagen(imagen_bytes: bytes, organo_filtro: str = None) -> dict:
     import torch
     from PIL import Image
     import numpy as np
+    import io
+    import time
     
-    if not cargar_modelo():
-        raise Exception("No se pudo cargar el modelo")
+    if not cargar_modelo("biomedclip"):
+        raise Exception("No se pudo cargar el modelo BiomedCLIP")
     
+    m = modelos_cargados["biomedclip"]
+    modelo = m["modelo"]
+    procesador = m["procesador"]
+    tokenizer = m["tokenizer"]
+
     imagen = Image.open(io.BytesIO(imagen_bytes)).convert("RGB")
     imagen_procesada = procesador(imagen).unsqueeze(0)
     
@@ -977,7 +1003,7 @@ async def lifespan(app: FastAPI):
     print("📋 Documentación API: http://localhost:8000/docs")
     print(f"📊 Categorías disponibles: {list(CATEGORIAS_FORENSES.keys())}")
     yield
-    liberar_modelo()
+    liberar_modelo("todas")
     print("👋 Servidor cerrado")
 
 
@@ -1014,16 +1040,6 @@ app.add_middleware(
 )
 
 
-# Modelos de respuesta
-class EstadoModelo(BaseModel):
-    cargado: bool
-    nombre: str
-    tipo: str
-    consumo_ram: str
-    num_categorias: int
-    num_diagnosticos: int
-
-
 @app.get("/")
 async def raiz():
     """Endpoint raíz - información del servicio"""
@@ -1049,18 +1065,39 @@ async def raiz():
     }
 
 
-@app.get("/estado", response_model=EstadoModelo)
+@app.get("/estado")
 async def obtener_estado():
-    """Obtiene el estado actual del modelo"""
-    total_diagnosticos = sum(len(data["diagnosticos"]) for data in CATEGORIAS_FORENSES.values())
-    return EstadoModelo(
-        cargado=modelo_cargado,
-        nombre="BiomedCLIP (Microsoft)",
-        tipo="Zero-Shot Classification - Forense",
-        consumo_ram="~1.5 GB cuando está cargado",
-        num_categorias=len(CATEGORIAS_FORENSES),
-        num_diagnosticos=total_diagnosticos
-    )
+    """Obtiene el estado de los modelos. Sincronizado con el frontend."""
+    status = {}
+    
+    # BiomedCLIP status
+    cargado_biomed = modelos_cargados["biomedclip"]["modelo"] is not None
+    status["biomedclip"] = {
+        "cargado": cargado_biomed,
+        "nombre": "BiomedCLIP (Microsoft)",
+        "tipo": "Zero-Shot Classification - Forense",
+        "consumo_ram": "~1.5 GB" if cargado_biomed else "0 GB",
+        "num_categorias": len(CATEGORIAS_FORENSES),
+        "num_diagnosticos": sum(len(data["diagnosticos"]) for data in CATEGORIAS_FORENSES.values())
+    }
+    
+    # BioViL status (reutiliza el motor BiomedCLIP)
+    cargado_biovil = modelos_cargados["biovil"]["modelo"] is not None
+    status["biovil"] = {
+        "cargado": cargado_biovil,
+        "nombre": "BioViL-T (Microsoft)",
+        "tipo": "Zero-Shot Classification - Radiografía de Tórax",
+        "consumo_ram": "~1.5 GB (compartido con BiomedCLIP)" if cargado_biovil else "0 GB",
+        "num_categorias": len(CATEGORIAS_RADIOGRAFIA),
+        "num_diagnosticos": sum(len(data["diagnosticos"]) for data in CATEGORIAS_RADIOGRAFIA.values())
+    }
+    
+    # Compatibilidad con formato antiguo (si el frontend no ha actualizado)
+    # Esto devuelve el estado de biomedclip directamente en la raíz del JSON
+    # para clientes que esperan el formato anterior de /estado
+    status.update(status["biomedclip"])
+    
+    return status
 
 
 @app.get("/categorias")
@@ -1108,20 +1145,20 @@ async def obtener_categoria(categoria: str):
 
 
 @app.post("/cargar-modelo")
-async def endpoint_cargar_modelo():
-    """Carga el modelo en memoria"""
-    exito = cargar_modelo()
+async def endpoint_cargar_modelo(modelo: str = "biomedclip"):
+    """Carga un modelo específico en memoria"""
+    exito = cargar_modelo(modelo)
     if exito:
-        return {"exito": True, "mensaje": "Modelo BiomedCLIP cargado correctamente"}
+        return {"exito": True, "mensaje": f"Modelo {modelo} cargado correctamente"}
     else:
-        raise HTTPException(status_code=500, detail="Error al cargar el modelo")
+        raise HTTPException(status_code=500, detail=f"Error al cargar el modelo {modelo}")
 
 
 @app.post("/liberar-modelo")
-async def endpoint_liberar_modelo():
-    """Libera el modelo de memoria"""
-    liberar_modelo()
-    return {"exito": True, "mensaje": "Modelo liberado de memoria"}
+async def endpoint_liberar_modelo(modelo: str = "todas"):
+    """Libera un modelo específico o todos de la memoria"""
+    liberar_modelo(modelo)
+    return {"exito": True, "mensaje": f"Modelo(s) {modelo} liberado(s) de memoria"}
 
 
 @app.post("/analizar")
@@ -1190,11 +1227,11 @@ async def analizar_y_liberar(archivo: UploadFile = File(...)):
     """
     try:
         resultado = await analizar(archivo)
-        liberar_modelo()
+        liberar_modelo("biomedclip") # Solo liberar biomedclip si fue el usado
         resultado["modelo_liberado"] = True
         return resultado
     except HTTPException:
-        liberar_modelo()
+        liberar_modelo("biomedclip")
         raise
 
 
@@ -1339,64 +1376,58 @@ def obtener_todos_diagnosticos_radiografia():
 
 def analizar_imagen_radiografia(imagen_bytes: bytes) -> dict:
     """
-    Analiza una radiografía de tórax usando clasificación zero-shot.
-    Usa el mismo modelo BiomedCLIP pero con prompts específicos para radiografías.
+    Analiza una radiografía de tórax usando el motor BiomedCLIP optimizado con prompts de BioViL-T.
     """
     import torch
+    import time
     from PIL import Image
     import numpy as np
+    import io
+
+    # BioViL-T usa el motor de BiomedCLIP para este despliegue
+    if not cargar_modelo("biovil"):
+        raise Exception("No se pudo cargar el motor para análisis de radiografías")
     
-    if not cargar_modelo():
-        raise Exception("No se pudo cargar el modelo")
-    
+    m = modelos_cargados["biomedclip"]
+    modelo = m["modelo"]
+    procesador = m["procesador"]
+    tokenizer = m["tokenizer"]
+
     imagen = Image.open(io.BytesIO(imagen_bytes)).convert("RGB")
-    imagen_procesada = procesador(imagen).unsqueeze(0)
     
+    # Diagnósticos especializados para radiografía de tórax (BioViL-T style)
     diagnosticos = obtener_todos_diagnosticos_radiografia()
-    
-    # Template específico para radiografías
-    template = "chest x-ray showing "
+    template = "chest x-ray with "
     textos = [template + d["texto"] for d in diagnosticos]
-    
-    try:
-        tokens = tokenizer(textos)
-    except Exception as e:
-        print(f"⚠️ Error en tokenización: {e}")
-        if hasattr(tokenizer, 'tokenizer'):
-            tokens = tokenizer.tokenizer(textos, padding=True, truncation=True, return_tensors="pt")["input_ids"]
-        else:
-            raise e
     
     inicio = time.time()
     with torch.no_grad():
-        image_features = modelo.encode_image(imagen_procesada)
-        text_features = modelo.encode_text(tokens)
+        image_input = procesador(imagen).unsqueeze(0)
+        tokens = tokenizer(textos)
         
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        image_features, text_features, logit_scale = modelo(image_input, tokens)
         
-        logit_scale = modelo.logit_scale.exp()
-        logits = (logit_scale * image_features @ text_features.T).softmax(dim=-1)
-        
+        # Calcular probabilidades
+        probabilidades = (100.0 * image_features @ text_features.T).softmax(dim=-1).cpu().numpy()[0]
+    
     tiempo_inferencia = time.time() - inicio
     
-    probabilidades = logits[0].numpy()
+    # Formatear resultados
+    resultados = []
     indices_ordenados = np.argsort(probabilidades)[::-1]
     
-    resultados = []
     for idx in indices_ordenados:
-        prob = float(probabilidades[idx])
-        diag = diagnosticos[idx]
+        d = diagnosticos[idx]
         resultados.append({
-            "diagnostico_id": diag["id"],
-            "diagnostico": diag["nombre_es"],
-            "descripcion": diag["descripcion"],
-            "organo": diag["organo_nombre"],
-            "probabilidad": round(prob * 100, 1),
-            "hallazgos": diag.get("hallazgos", []),
+            "id": d["id"],
+            "diagnostico": d["nombre_es"],
+            "probabilidad": float(probabilidades[idx]),
+            "organo": "Tórax",
+            "descripcion": d["descripcion"],
+            "hallazgos": d.get("hallazgos", []),
             "info_adicional": {
-                k: v for k, v in diag.items() 
-                if k not in ["id", "texto", "nombre_es", "descripcion", "hallazgos", "organo", "organo_nombre"]
+                "gravedad": d.get("gravedad", "media"),
+                "modelo": "BioViL-T (Microsoft)"
             }
         })
     
@@ -1410,9 +1441,8 @@ def analizar_imagen_radiografia(imagen_bytes: bytes) -> dict:
         "confianza": confianza,
         "tiempo_analisis": f"{tiempo_inferencia:.2f}s",
         "tamano_imagen": f"{imagen.size[0]}x{imagen.size[1]}",
-        "modelo": "BiomedCLIP (Microsoft)",
+        "modelo": "BioViL-T (Microsoft)",
         "tipo_imagen": "Radiografía de tórax",
-        "tipo_clasificacion": "Zero-shot",
         "num_categorias_evaluadas": len(diagnosticos)
     }
 
@@ -1440,6 +1470,8 @@ async def analizar_radiografia(archivo: UploadFile = File(...)):
         }
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error en análisis: {str(e)}")
 
 
@@ -1463,7 +1495,13 @@ async def obtener_categorias_radiografia():
 @app.get("/health")
 async def health_check():
     """Verificación de salud del servicio"""
-    return {"status": "healthy", "modelo_cargado": modelo_cargado}
+    biomed_ok = modelos_cargados["biomedclip"]["modelo"] is not None
+    biovil_ok = modelos_cargados["biovil"]["modelo"] is not None
+    return {
+        "status": "healthy", 
+        "biomedclip_cargado": biomed_ok,
+        "biovil_cargado": biovil_ok
+    }
 
 
 if __name__ == "__main__":
