@@ -9,8 +9,8 @@ services:
       - key: PYTHON_VERSION
         value: 3.10.0 # Ajusta según sea necesario
 
-  # Frontend: React (Static Site)
-  - type: static
+  # Frontend: React (Statica)
+  - type: web
     name: patologia-frontend
     env: static
     buildCommand: cd frontend && npm install && npm run build
