@@ -6,6 +6,9 @@ export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000")
 export async function verificarConexion() {
   try {
     const response = await fetch(`${API_URL}/`);
+    if (!response.ok) {
+      console.error(`Error en verificarConexion (${API_URL}/): status ${response.status}`);
+    }
     return response.ok;
   } catch (error) {
     console.error("Error verificando conexión:", error);
@@ -19,7 +22,7 @@ export async function verificarConexion() {
 export async function obtenerEstadoModelo() {
   try {
     const response = await fetch(`${API_URL}/estado`);
-    if (!response.ok) throw new Error("Error obteniendo estado");
+    if (!response.ok) throw new Error(`Error obteniendo estado de ${API_URL}/estado (status ${response.status})`);
     return await response.json();
   } catch (error) {
     console.error("Error obteniendo estado del modelo:", error);
@@ -47,8 +50,12 @@ export async function analizarImagen(archivo, categoria = null) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || "Error en análisis");
+      let errorDetail = "Error en análisis";
+      try {
+        const error = await response.json();
+        errorDetail = error.detail || errorDetail;
+      } catch (e) {}
+      throw new Error(`${errorDetail} (Endpoint: ${endpoint}, Status: ${response.status})`);
     }
 
     return await response.json();
@@ -73,8 +80,12 @@ export async function analizarRadiografia(archivo) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || "Error en análisis de radiografía");
+      let errorDetail = "Error en análisis de radiografía";
+      try {
+        const error = await response.json();
+        errorDetail = error.detail || errorDetail;
+      } catch (e) {}
+      throw new Error(`${errorDetail} (Endpoint: ${API_URL}/analizar-radiografia, Status: ${response.status})`);
     }
 
     return await response.json();

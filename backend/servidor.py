@@ -1006,7 +1006,8 @@ async def lifespan(app: FastAPI):
     """)
     print("🔬 Servidor iniciado")
     print("📋 Documentación API: http://localhost:8000/docs")
-    print(f"📊 Categorías disponibles: {list(CATEGORIAS_FORENSES.keys())}")
+    print(f"📊 Categorías forenses: {list(CATEGORIAS_FORENSES.keys())}")
+    print(f"🩻 Categorías radiografía: {list(CATEGORIAS_RADIOGRAFIA.keys())}")
     yield
     liberar_modelo("todas")
     print("👋 Servidor cerrado")
@@ -1057,24 +1058,23 @@ async def raiz():
     """Endpoint raíz - información del servicio"""
     total_diagnosticos = sum(len(data["diagnosticos"]) for data in CATEGORIAS_FORENSES.values())
     return {
-        "servicio": "INTCF Patología Digital Forense API",
+        "servicio": "INTCF Patología Digital Forense",
         "version": "2.1.0",
-        "modelo": "BiomedCLIP (Microsoft)",
-        "tipo": "Zero-Shot Classification - Medicina Forense",
-        "estado": "activo",
-        "estadisticas": {
-            "categorias": len(CATEGORIAS_FORENSES),
-            "diagnosticos_totales": total_diagnosticos
-        },
-        "categorias_disponibles": list(CATEGORIAS_FORENSES.keys()),
-        "endpoints": {
-            "analizar": "POST /analizar",
-            "analizar_categoria": "POST /analizar/{categoria}",
-            "estado": "GET /estado",
-            "categorias": "GET /categorias",
-            "documentacion": "GET /docs"
-        }
+        "motor": "BiomedCLIP",
+        "diagnosticos_disponibles": total_diagnosticos,
+        "status": "online"
     }
+
+
+@app.get("/api/rutas")
+async def listar_rutas():
+    """Lista todas las rutas registradas en la aplicación"""
+    rutas = []
+    for route in app.routes:
+        if hasattr(route, "path"):
+            methods = list(route.methods) if hasattr(route, "methods") else []
+            rutas.append({"path": route.path, "methods": methods, "name": route.name})
+    return {"rutas": rutas}
 
 
 @app.get("/api/estado")
