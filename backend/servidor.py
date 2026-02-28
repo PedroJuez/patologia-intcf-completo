@@ -1033,7 +1033,7 @@ app = FastAPI(
     - **toxicologia**: CO, opiáceos, cocaína, paracetamol
     - **piel**: Excoriaciones, equimosis, mordeduras
     """,
-    version="2.1.0",
+    version="2.2.0 (Diagnostic Mode)",
     lifespan=lifespan
 )
 
@@ -1053,20 +1053,22 @@ async def custom_404_handler(request: Request, exc):
     )
 
 
-@app.get("/api")
+@app.get("/")
 async def raiz():
     """Endpoint raíz - información del servicio"""
     total_diagnosticos = sum(len(data["diagnosticos"]) for data in CATEGORIAS_FORENSES.values())
     return {
         "servicio": "INTCF Patología Digital Forense",
-        "version": "2.1.0",
+        "version": "2.2.0",
         "motor": "BiomedCLIP",
         "diagnosticos_disponibles": total_diagnosticos,
-        "status": "online"
+        "status": "online",
+        "diagnostic_mode": True
     }
 
 
-@app.get("/api/rutas")
+@app.get("/rutas")
+@app.get("/api/rutas") # Mantener ambos por si acaso
 async def listar_rutas():
     """Lista todas las rutas registradas en la aplicación"""
     rutas = []
@@ -1077,7 +1079,7 @@ async def listar_rutas():
     return {"rutas": rutas}
 
 
-@app.get("/api/estado")
+@app.get("/estado")
 async def obtener_estado():
     """Obtiene el estado de los modelos. Sincronizado con el frontend."""
     status = {}
@@ -1173,7 +1175,7 @@ async def endpoint_liberar_modelo(modelo: str = "todas"):
     return {"exito": True, "mensaje": f"Modelo(s) {modelo} liberado(s) de memoria"}
 
 
-@app.post("/api/analizar")
+@app.post("/analizar")
 async def analizar(archivo: UploadFile = File(...)):
     """
     Analiza una imagen histológica buscando en TODAS las categorías forenses.
@@ -1199,7 +1201,7 @@ async def analizar(archivo: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error en análisis: {str(e)}")
 
 
-@app.post("/api/analizar/{categoria}")
+@app.post("/analizar/{categoria}")
 async def analizar_por_categoria(categoria: str, archivo: UploadFile = File(...)):
     """
     Analiza una imagen buscando solo en diagnósticos de la categoría especificada.
@@ -1473,7 +1475,7 @@ def analizar_imagen_radiografia(imagen_bytes: bytes) -> dict:
     }
 
 
-@app.post("/api/analizar-radiografia")
+@app.post("/analizar-radiografia")
 async def analizar_radiografia(archivo: UploadFile = File(...)):
     """
     Analiza una radiografía de tórax.
